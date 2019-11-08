@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+import subprocess, argparse, yaml, os
+
+def parseArgs():
+    parser = argparse.ArgumentParser(prog="hpcSubmit", description='Receive command line arguments')
+
+    parser.add_argument('snakefile', type=os.path.abspath, help='Path to snakefile')
+
+    parser.add_argument('--until', type=str, metavar="TARGET", help=('''
+    Runs the pipeline until it reaches the specified rules or files.
+    Only runs jobs that are dependencies of the specified rule or files,
+    does not run sibling DAGs.
+    '''))
+
+    parser.add_argument('--configfile', metavar="CONFIG", type=str, help=('''
+    Specify or overwrite the config file of the workflow
+    (see the docs). Values specified in JSON or YAML
+    format are available in the global config dictionary
+    inside the workflow.
+    '''))
+
+    parser.add_argument('--restart', metavar="NUM", type=str, default="0", help=('''
+    Number of times to restart failing jobs.
+    Mainly used for download pipelines where jobs might fail due to connectivity issues.
+    Default: 3
+    '''))
+
+    parser.add_argument('--rerun', help=('''
+    Re-run all jobs the output of which is recognized as incomplete.
+    '''))
+
+    parser.add_argument('--forceall', metavar="TARGET", help=('''
+    Force the execution of the selected (or the first)
+    rule and all rules it is dependent on regardless of
+    already created output.
+    '''))
+
+    parser.add_argument('--forcerun', metavar="TARGET", help=('''
+    Force the re-execution or creation of the given rules
+    or files. Use this option if you changed a rule and
+    want to have all its output in your workflow updated.
+    '''))
+
+    parser.add_argument('-n', action='store_true', help=('''
+    Do not execute anything, and display what would be
+    done. If you have a very large workflow, use --dry-run
+    --quiet to just print a summary of the DAG of jobs.
+    '''))
+
+    args = parser.parse_args()
+    return args
+
+def ClusterCmd():
+
+    cluster_cmd = (
+    'sbatch '
+    '--parsable '
+    '--partition={params.partition} '
+    '--nodes={params.nodes} '
+    '--ntasks={params.ntasks} '
+    '--time={params.time} '
+    '--mem={params.mem} '
+    '--job-name={rule} '
+    '--mail-user={params.mail_user} '
+    '--mail-type={params.mail_type} '
+    '--qos=medium')
+
+    return cluster_cmd
+
+def AddExtra(args):
+    extra = ''
+
+    if args.until:
+        extra += "--until {} ".format(args.until)
+    else:
+        pass
+
+    if args.configfile:
+        extra += "--configfile {} ".format(args.configfile)
+    else:
+        pass
+
+    if args.restart:
+        extra += "--restart-times {} ".format(args.restart)
+
+    if args.rerun:
+        extra += "--rerun-incomplete "
+
+    if args.forceall:
+
+        extra += "--forceall "
+
+    if args.forcerun:
+        extra += "--forcerun {} ".format(args.forcerun)
+
+    if args.n:
+        extra += "-n "
+
+    return extra
+
+def RunSnake():
+
+    args = parseArgs()
+
+    snakefile_path = args.snakefile
+    cluster_cmd = ClusterCmd()
+    extra = AddExtra(args)
+
+    cmd = (
+    'snakemake '
+    '-j 40 '
+    '--use-conda '
+    '--use-singularity '
+    '--singularity-args "--bind /scratch:/scratch " '
+    '--cluster "{}" '
+    '-s {} '
+    '{}'
+    ).format(cluster_cmd, snakefile_path, extra)
+
+    subprocess.run(cmd, shell=True)
+
+RunSnake()
