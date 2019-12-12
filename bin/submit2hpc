@@ -25,7 +25,7 @@ def parseArgs():
     Default: 3
     '''))
 
-    parser.add_argument('--rerun', help=('''
+    parser.add_argument('--rerun', action='store_true', help=('''
     Re-run all jobs the output of which is recognized as incomplete.
     '''))
 
